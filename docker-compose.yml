@@ -1,0 +1,45 @@
+# Frugal self-hosted Postgres for GhostTag.
+#   docker compose up -d
+# On first boot it auto-applies db/schema.sql. Then point the app at it:
+#   DATABASE_URL=postgres://ghosttag:ghosttag@localhost:5432/ghosttag
+#
+# At 1M+ users behind several app instances, uncomment the pgbouncer service and
+# connect the app to it (port 6432) instead of Postgres directly, so the total
+# number of real Postgres connections stays bounded.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ghosttag
+      POSTGRES_PASSWORD: ghosttag
+      POSTGRES_DB: ghosttag
+    ports:
+      - "5432:5432"
+    volumes:
+      - ghosttag_pgdata:/var/lib/postgresql/data
+      # Runs only when the data directory is empty (first boot).
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghosttag -d ghosttag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgbouncer:
+  #   image: edoburu/pgbouncer:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     DATABASE_URL: postgres://ghosttag:ghosttag@postgres:5432/ghosttag
+  #     POOL_MODE: transaction
+  #     MAX_CLIENT_CONN: "1000"
+  #     DEFAULT_POOL_SIZE: "25"
+  #   ports:
+  #     - "6432:6432"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+volumes:
+  ghosttag_pgdata:
